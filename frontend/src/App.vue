@@ -1,11 +1,41 @@
 <template>
-  <div class="app">
-    <nav v-if="token">
-      <router-link to="/screenings">Screenings</router-link>
-      <router-link v-if="role === 'ADMIN'" to="/admin">Admin</router-link>
-      <button @click="logout">Logout</button>
+  <div class="min-h-screen bg-white font-sans text-stone-800">
+    <nav v-if="token" class="sticky top-0 z-50 border-b border-stone-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        <div class="flex items-center gap-6">
+          <router-link
+            to="/screenings"
+            class="text-stone-600 transition hover:text-amber-600"
+            active-class="text-amber-600 font-medium"
+          >
+            หน้าหลัก (Screenings)
+          </router-link>
+          <router-link
+            v-if="role === 'ADMIN'"
+            to="/admin"
+            class="text-stone-600 transition hover:text-amber-600"
+            active-class="text-amber-600 font-medium"
+          >
+            Admin
+          </router-link>
+          <router-link
+            to="/login"
+            class="text-stone-600 transition hover:text-amber-600"
+            @click.prevent="logout"
+          >
+            ไปหน้า Login
+          </router-link>
+        </div>
+        <button
+          type="button"
+          @click="logout"
+          class="rounded-lg border border-stone-300 bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-200"
+        >
+          ออกระบบ
+        </button>
+      </div>
     </nav>
-    <main>
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <router-view />
     </main>
   </div>
@@ -28,14 +58,3 @@ const logout = () => {
   window.location.href = '/login'
 }
 </script>
-
-<style>
-* { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; background: #0f0f12; color: #e0e0e0; }
-.app { min-height: 100vh; }
-nav { padding: 0.75rem 1.5rem; background: #1a1a20; display: flex; gap: 1rem; align-items: center; }
-nav a { color: #7dd3fc; text-decoration: none; }
-nav a.router-link-active { text-decoration: underline; }
-nav button { background: #333; color: #e0e0e0; border: 1px solid #555; padding: 0.35rem 0.75rem; cursor: pointer; border-radius: 4px; }
-main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-</style>

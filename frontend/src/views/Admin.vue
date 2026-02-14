@@ -1,58 +1,134 @@
 <template>
-  <div class="admin">
-    <h1>Admin</h1>
-    <section>
-      <h2>Create screening</h2>
-      <form @submit.prevent="createScreening" class="form">
-        <input v-model="form.movie_id" placeholder="Movie ID" required />
-        <input v-model="form.movie_name" placeholder="Movie name" required />
-        <input v-model="form.screen_at" type="datetime-local" required />
-        <input v-model.number="form.rows" type="number" min="1" placeholder="Rows" />
-        <input v-model.number="form.cols" type="number" min="1" placeholder="Cols" />
-        <button type="submit" :disabled="creating">Create</button>
+  <div class="space-y-10">
+    <h1 class="text-2xl font-bold text-stone-800 sm:text-3xl">Admin</h1>
+
+    <!-- Create screening -->
+    <section class="rounded-xl border border-stone-200 bg-stone-50 p-6">
+      <h2 class="mb-4 text-lg font-semibold text-stone-800">Create screening</h2>
+      <form @submit.prevent="createScreening" class="flex flex-wrap items-end gap-3">
+        <input
+          v-model="form.movie_id"
+          placeholder="Movie ID"
+          required
+          class="w-28 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model="form.movie_name"
+          placeholder="Movie name"
+          required
+          class="min-w-[160px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model="form.screen_at"
+          type="datetime-local"
+          required
+          class="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model.number="form.rows"
+          type="number"
+          min="1"
+          placeholder="Rows"
+          class="w-20 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model.number="form.cols"
+          type="number"
+          min="1"
+          placeholder="Cols"
+          class="w-20 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <button
+          type="submit"
+          :disabled="creating"
+          class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-stone-900 transition hover:bg-amber-400 disabled:opacity-60"
+        >
+          {{ creating ? 'Creating...' : 'Create' }}
+        </button>
       </form>
-      <p v-if="createMessage" class="message">{{ createMessage }}</p>
+      <p v-if="createMessage" class="mt-3 text-sm text-green-600">{{ createMessage }}</p>
     </section>
-    <section>
-      <h2>Bookings</h2>
-      <div class="filters">
-        <input v-model="filters.user_id" placeholder="User ID" />
-        <input v-model="filters.screening_id" placeholder="Screening ID" />
-        <input v-model="filters.movie_id" placeholder="Movie ID" />
-        <button @click="loadBookings">Apply</button>
+
+    <!-- Bookings -->
+    <section class="rounded-xl border border-stone-200 bg-stone-50 p-6">
+      <h2 class="mb-4 text-lg font-semibold text-stone-800">Bookings</h2>
+      <div class="mb-4 flex flex-wrap gap-2">
+        <input
+          v-model="filters.user_id"
+          placeholder="User ID"
+          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model="filters.screening_id"
+          placeholder="Screening ID"
+          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model="filters.movie_id"
+          placeholder="Movie ID"
+          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <button
+          type="button"
+          class="rounded-lg bg-stone-200 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-300"
+          @click="loadBookings"
+        >
+          Apply
+        </button>
       </div>
-      <p v-if="bookingsLoading">Loading...</p>
-      <div v-else class="table-wrap">
-        <table>
-          <thead>
+      <p v-if="bookingsLoading" class="flex items-center gap-2 text-stone-500">
+        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+        Loading...
+      </p>
+      <div v-else class="overflow-x-auto rounded-lg border border-stone-200">
+        <table class="w-full min-w-[500px] text-left text-sm">
+          <thead class="border-b border-stone-200 bg-stone-100">
             <tr>
-              <th>Movie</th>
-              <th>User ID</th>
-              <th>Seat</th>
-              <th>Status</th>
-              <th>Created</th>
+              <th class="px-4 py-3 font-medium text-stone-700">Movie</th>
+              <th class="px-4 py-3 font-medium text-stone-700">User ID</th>
+              <th class="px-4 py-3 font-medium text-stone-700">Seat</th>
+              <th class="px-4 py-3 font-medium text-stone-700">Status</th>
+              <th class="px-4 py-3 font-medium text-stone-700">Created</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="row in bookings" :key="row.booking?.id">
-              <td>{{ row.movie_name || '-' }}</td>
-              <td>{{ row.booking?.user_id }}</td>
-              <td>{{ row.booking?.seat_row }}-{{ row.booking?.seat_col }}</td>
-              <td>{{ row.booking?.status }}</td>
-              <td>{{ formatDate(row.booking?.created_at) }}</td>
+          <tbody class="divide-y divide-stone-200">
+            <tr v-for="row in bookings" :key="row.booking?.id" class="text-stone-600">
+              <td class="px-4 py-3 text-stone-800">{{ row.movie_name || '-' }}</td>
+              <td class="px-4 py-3">{{ row.booking?.user_id }}</td>
+              <td class="px-4 py-3">{{ row.booking?.seat_row }}-{{ row.booking?.seat_col }}</td>
+              <td class="px-4 py-3">{{ row.booking?.status }}</td>
+              <td class="px-4 py-3">{{ formatDate(row.booking?.created_at) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
-    <section>
-      <h2>Audit logs</h2>
-      <button @click="loadLogs">Refresh</button>
-      <p v-if="logsLoading">Loading...</p>
-      <ul v-else class="logs">
-        <li v-for="(log, i) in logs" :key="i">
-          <strong>{{ log.event }}</strong> {{ JSON.stringify(log.payload) }}
-          <span class="muted">{{ formatDate(log.created_at) }}</span>
+
+    <!-- Audit logs -->
+    <section class="rounded-xl border border-stone-200 bg-stone-50 p-6">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-stone-800">Audit logs</h2>
+        <button
+          type="button"
+          class="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
+          @click="loadLogs"
+        >
+          Refresh
+        </button>
+      </div>
+      <p v-if="logsLoading" class="flex items-center gap-2 text-stone-500">
+        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+        Loading...
+      </p>
+      <ul v-else class="space-y-2">
+        <li
+          v-for="(log, i) in logs"
+          :key="i"
+          class="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm"
+        >
+          <strong class="text-amber-600">{{ log.event }}</strong>
+          <span class="text-stone-600"> {{ JSON.stringify(log.payload) }}</span>
+          <span class="ml-2 text-stone-400">{{ formatDate(log.created_at) }}</span>
         </li>
       </ul>
     </section>
@@ -130,20 +206,3 @@ function formatDate(d) {
   return new Date(d).toLocaleString()
 }
 </script>
-
-<style scoped>
-.admin section { margin-bottom: 2rem; }
-.admin h2 { margin-bottom: 0.75rem; font-size: 1.1rem; }
-.form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
-.form input { padding: 0.4rem; border: 1px solid #333; border-radius: 4px; background: #0f0f12; color: #e0e0e0; }
-.form button { padding: 0.5rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-.filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-.filters input { padding: 0.4rem; width: 140px; border: 1px solid #333; border-radius: 4px; background: #0f0f12; color: #e0e0e0; }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #333; }
-.logs { list-style: none; padding: 0; font-size: 0.9rem; }
-.logs li { padding: 0.35rem 0; border-bottom: 1px solid #222; }
-.muted { color: #666; margin-left: 0.5rem; }
-.message { margin-top: 0.5rem; color: #86efac; }
-</style>

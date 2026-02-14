@@ -12,7 +12,24 @@ export async function login(body) {
   const r = await fetch(`${base}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ email: body.email, password: body.password }),
+  })
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}))
+    throw new Error(e.error || r.statusText)
+  }
+  return r.json()
+}
+
+export async function register(body) {
+  const r = await fetch(`${base}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: body.email,
+      name: body.name || body.email,
+      password: body.password,
+    }),
   })
   if (!r.ok) {
     const e = await r.json().catch(() => ({}))
@@ -25,7 +42,7 @@ export async function adminLogin(body) {
   const r = await fetch(`${base}/admin/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ email: body.email, password: body.password }),
   })
   if (!r.ok) {
     const e = await r.json().catch(() => ({}))
@@ -52,6 +69,17 @@ export async function getSeatMap(id) {
   if (!r.ok) {
     if (r.status === 401) throw new Error('Please log in again')
     throw new Error(data.error || 'Failed to load seats')
+  }
+  return data
+}
+
+/** รายการที่นั่งที่ถูกล็อก/จอง พร้อมเวลา (สำหรับหน้า ScreeningList) */
+export async function getSeatDetails(id) {
+  const r = await fetch(`${base}/api/screenings/${id}/seat-details`, { headers: headers() })
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) {
+    if (r.status === 401) throw new Error('Please log in again')
+    throw new Error(data.error || 'Failed to load seat details')
   }
   return data
 }

@@ -144,8 +144,12 @@ func (r *MongoRepo) ListBookings(ctx context.Context, filter bson.M) ([]*model.B
 }
 
 func (r *MongoRepo) UpsertUser(ctx context.Context, u *model.User) error {
+	set := bson.M{"email": u.Email, "name": u.Name, "role": u.Role}
+	if u.PasswordHash != "" {
+		set["password_hash"] = u.PasswordHash
+	}
 	_, err := r.userCol().UpdateOne(ctx, bson.M{"_id": u.ID},
-		bson.M{"$set": bson.M{"email": u.Email, "name": u.Name, "role": u.Role}},
+		bson.M{"$set": set},
 		options.Update().SetUpsert(true))
 	return err
 }
@@ -153,6 +157,15 @@ func (r *MongoRepo) UpsertUser(ctx context.Context, u *model.User) error {
 func (r *MongoRepo) GetUser(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	err := r.userCol().FindOne(ctx, bson.M{"_id": id}).Decode(&u)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (r *MongoRepo) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
+	var u model.User
+	err := r.userCol().FindOne(ctx, bson.M{"email": email}).Decode(&u)
 	if err != nil {
 		return nil, err
 	}

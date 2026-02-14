@@ -11,12 +11,13 @@ import (
 )
 
 type Handler struct {
-	Repo     *repository.MongoRepo
-	Lock     *lock.Manager
-	Hub      *ws.Hub
-	Pub      *mq.Publisher
-	JWTSecret string
-	OnAudit  func(event string, payload map[string]any)
+	Repo            *repository.MongoRepo
+	Lock            *lock.Manager
+	Hub             *ws.Hub
+	Pub             *mq.Publisher
+	JWTSecret       string
+	LockTTLSeconds  int
+	OnAudit         func(event string, payload map[string]any)
 }
 
 func (h *Handler) audit(event string, payload map[string]any) {

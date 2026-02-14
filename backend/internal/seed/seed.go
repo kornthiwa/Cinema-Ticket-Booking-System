@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"cinema-booking/internal/auth"
 	"cinema-booking/internal/model"
 	"cinema-booking/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -62,9 +63,12 @@ func Run(ctx context.Context, repo *repository.MongoRepo) {
 		log.Printf("seed: created screening %s (%s)", s.MovieName, s.ID.Hex())
 	}
 
+
+	adminHash, _ := auth.HashPassword("123456")
+	userHash, _ := auth.HashPassword("123456")
 	users := []*model.User{
-		{ID: "admin@cinema.local", Email: "admin@cinema.local", Name: "Admin", Role: model.RoleAdmin},
-		{ID: "user@cinema.local", Email: "user@cinema.local", Name: "Demo User", Role: model.RoleUser},
+		{ID: "admin@cinema.local", Email: "admin@cinema.local", Name: "Admin", Role: model.RoleAdmin, PasswordHash: adminHash},
+		{ID: "user@cinema.local", Email: "user@cinema.local", Name: "Demo User", Role: model.RoleUser, PasswordHash: userHash},
 	}
 	for _, u := range users {
 		if err := repo.UpsertUser(ctx, u); err != nil {

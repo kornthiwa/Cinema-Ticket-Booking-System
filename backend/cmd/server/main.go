@@ -65,12 +65,13 @@ func main() {
 	go worker.RunLockExpiry(ctx, repo, lockMgr, pub, hub, onAudit)
 
 	h := &handler.Handler{
-		Repo:      repo,
-		Lock:      lockMgr,
-		Hub:       hub,
-		Pub:       pub,
-		JWTSecret: cfg.JWTSecret,
-		OnAudit:   onAudit,
+		Repo:           repo,
+		Lock:           lockMgr,
+		Hub:            hub,
+		Pub:            pub,
+		JWTSecret:      cfg.JWTSecret,
+		LockTTLSeconds: cfg.LockTTLSeconds,
+		OnAudit:        onAudit,
 	}
 
 	r := gin.Default()
@@ -84,6 +85,7 @@ func main() {
 	})
 
 	r.POST("/auth/login", h.Login)
+	r.POST("/auth/register", h.Register)
 
 	api := r.Group("/api")
 	api.Use(middleware.Auth(cfg.JWTSecret))
@@ -91,6 +93,7 @@ func main() {
 		api.GET("/screenings", h.ListScreenings)
 		api.GET("/screenings/:id", h.GetScreening)
 		api.GET("/screenings/:id/seats", h.GetSeatMap)
+		api.GET("/screenings/:id/seat-details", h.GetSeatDetails)
 		api.GET("/screenings/:id/ws", h.ServeWS)
 		api.POST("/screenings/:id/lock", h.LockSeat)
 		api.POST("/bookings/confirm", h.ConfirmPayment)
@@ -105,28 +108,32 @@ func main() {
 
 	r.POST("/admin/login", func(c *gin.Context) {
 		var body struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-			Name   string `json:"name"`
+			Email    string `json:"email"`
+			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if body.UserID == "" {
-			body.UserID = body.Email
-		}
-		u := &model.User{ID: body.UserID, Email: body.Email, Name: body.Name, Role: model.RoleAdmin}
-		if err := repo.UpsertUser(c.Request.Context(), u); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		u, err := repo.GetUserByEmail(c.Request.Context(), body.Email)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 			return
 		}
-		token, err := auth.IssueToken(cfg.JWTSecret, body.UserID, body.Email, "ADMIN")
+		if u.Role != model.RoleAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin access only"})
+			return
+		}
+		if u.PasswordHash == "" || !auth.CheckPassword(u.PasswordHash, body.Password) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			return
+		}
+		token, err := auth.IssueToken(cfg.JWTSecret, u.ID, u.Email, "ADMIN")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue token"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"token": token, "user_id": body.UserID, "role": "ADMIN"})
+		c.JSON(http.StatusOK, gin.H{"token": token, "user_id": u.ID, "role": "ADMIN"})
 	})
 
 	admin.POST("/screenings", h.CreateScreening)

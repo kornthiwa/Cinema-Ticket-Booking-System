@@ -9,4 +9,5 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/redis/go-redis/v9 v9.4.0
 	go.mongodb.org/mongo-driver v1.13.1
+	golang.org/x/crypto v0.28.0
 )

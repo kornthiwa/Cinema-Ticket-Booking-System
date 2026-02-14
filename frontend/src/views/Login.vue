@@ -1,75 +1,114 @@
 <template>
-  <div class="login">
-    <h1>Cinema Booking</h1>
-    <form @submit.prevent="submit" class="card">
-      <h2>Login</h2>
-      <p class="hint">Mock auth: enter any user id / email (e.g. from Google)</p>
-      <input v-model="email" type="text" placeholder="Email or User ID" required />
-      <input v-model="name" type="text" placeholder="Display name" />
-      <button type="submit" :disabled="loading">Login</button>
-      <p v-if="error" class="error">{{ error }}</p>
-    </form>
-    <p class="admin-link"><button type="button" @click="adminLogin">Admin login</button> (same form, creates ADMIN user)</p>
+  <div
+    class="flex min-h-[80vh] flex-col items-center justify-center px-4 py-12"
+  >
+    <div class="w-full max-w-md">
+      <h1
+        class="mb-2 text-center text-3xl font-bold tracking-tight text-stone-800 sm:text-4xl"
+      >
+        Cinema Booking
+      </h1>
+      <p class="mb-8 text-center text-stone-500">จองที่นั่งภาพยนตร์</p>
+
+      <div
+        class="rounded-2xl border border-stone-200 bg-stone-50 p-6 shadow-xl sm:p-8"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-stone-800">Login</h2>
+        <p class="mb-5 text-sm text-stone-500">
+          ใช้ email + รหัสผ่าน (seed: user@cinema.local / 123456)
+        </p>
+        <form @submit.prevent="submit" class="space-y-4">
+          <input
+            v-model="email"
+            type="email"
+            placeholder="Email"
+            required
+            autocomplete="email"
+            class="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-stone-800 placeholder-stone-400 outline-none transition focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+          />
+          <input
+            v-model="password"
+            type="password"
+            placeholder="Password"
+            required
+            autocomplete="current-password"
+            class="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-stone-800 placeholder-stone-400 outline-none transition focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+          />
+          <button
+            type="submit"
+            :disabled="loading"
+            class="w-full rounded-lg bg-amber-500 px-4 py-3 font-medium text-stone-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ loading ? "กำลังเข้าสู่ระบบ..." : "Login" }}
+          </button>
+        </form>
+        <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
+        <p class="mt-4 text-center text-sm text-stone-500">
+          ยังไม่มีบัญชี?
+          <router-link to="/register" class="text-amber-600 hover:underline"
+            >ลงทะเบียน</router-link
+          >
+        </p>
+      </div>
+
+      <p class="mt-6 text-center text-sm text-stone-500">
+        <button
+          type="button"
+          @click="adminLogin"
+          class="rounded-lg border border-stone-300 bg-stone-100 px-4 py-2 text-stone-600 transition hover:bg-stone-200"
+        >
+          Admin login
+        </button>
+        <span class="ml-2">(admin@cinema.local / 123456)</span>
+      </p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { login, adminLogin as adminLoginApi } from '../api'
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import { login, adminLogin as adminLoginApi } from "../api";
 
-const router = useRouter()
-const email = ref('')
-const name = ref('')
-const loading = ref(false)
-const error = ref('')
+const router = useRouter();
+const email = ref("");
+const password = ref("");
+const loading = ref(false);
+const error = ref("");
 
 async function submit() {
-  error.value = ''
-  loading.value = true
+  error.value = "";
+  loading.value = true;
   try {
-    const res = await login({ email: email.value, name: name.value, user_id: email.value })
-    localStorage.setItem('token', res.token)
-    localStorage.setItem('user_id', res.user_id)
-    localStorage.setItem('role', res.role || 'USER')
-    router.push('/screenings')
+    const res = await login({ email: email.value, password: password.value });
+    localStorage.setItem("token", res.token);
+    localStorage.setItem("user_id", res.user_id);
+    localStorage.setItem("role", res.role || "USER");
+    router.push("/screenings");
   } catch (e) {
-    error.value = e.message
+    error.value = e.message;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 async function adminLogin() {
-  error.value = ''
-  if (!email.value) {
-    email.value = 'admin@test.com'
-    name.value = 'Admin'
-  }
-  loading.value = true
+  error.value = "";
+  email.value = "admin@cinema.local";
+  password.value = "123456";
+  loading.value = true;
   try {
-    const res = await adminLoginApi({ email: email.value, name: name.value, user_id: email.value })
-    localStorage.setItem('token', res.token)
-    localStorage.setItem('user_id', res.user_id)
-    localStorage.setItem('role', res.role || 'ADMIN')
-    router.push('/admin')
+    const res = await adminLoginApi({
+      email: email.value,
+      password: password.value,
+    });
+    localStorage.setItem("token", res.token);
+    localStorage.setItem("user_id", res.user_id);
+    localStorage.setItem("role", res.role || "ADMIN");
+    router.push("/admin");
   } catch (e) {
-    error.value = e.message
+    error.value = e.message;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 </script>
-
-<style scoped>
-.login { text-align: center; padding: 2rem; }
-.login h1 { margin-bottom: 1.5rem; }
-.card { max-width: 360px; margin: 0 auto 1rem; padding: 1.5rem; background: #1a1a20; border-radius: 8px; text-align: left; }
-.card h2 { margin-top: 0; }
-.card input { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; border: 1px solid #333; border-radius: 4px; background: #0f0f12; color: #e0e0e0; }
-.card button { width: 100%; padding: 0.6rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-.card button:disabled { opacity: 0.6; cursor: not-allowed; }
-.hint { font-size: 0.85rem; color: #888; margin-bottom: 1rem; }
-.error { color: #f87171; font-size: 0.9rem; margin-top: 0.5rem; }
-.admin-link { margin-top: 1rem; }
-.admin-link button { background: #333; color: #94a3b8; border: 1px solid #555; padding: 0.35rem 0.75rem; cursor: pointer; border-radius: 4px; }
-</style>

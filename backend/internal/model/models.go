@@ -52,10 +52,11 @@ type Booking struct {
 }
 
 type User struct {
-	ID    string   `bson:"_id" json:"id"`
-	Email string   `bson:"email" json:"email"`
-	Name  string   `bson:"name" json:"name"`
-	Role  UserRole `bson:"role" json:"role"`
+	ID           string   `bson:"_id" json:"id"`
+	Email        string   `bson:"email" json:"email"`
+	Name         string   `bson:"name" json:"name"`
+	Role         UserRole `bson:"role" json:"role"`
+	PasswordHash string   `bson:"password_hash,omitempty" json:"-"` // for email+password login
 }
 
 type AuditLog struct {
