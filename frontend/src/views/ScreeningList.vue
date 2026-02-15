@@ -104,14 +104,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getScreenings, getSeatDetails } from '../api'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { getScreenings, getSeatDetails, wsUrl } from '../api'
 
 const list = ref([])
 const loading = ref(true)
 const expandedId = ref(null)
 const details = ref({})
 const detailsLoading = ref(null)
+let ws = null
 
 onMounted(async () => {
   try {
@@ -122,6 +123,37 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+function closeWs() {
+  if (ws) {
+    ws.onclose = null
+    ws.close()
+    ws = null
+  }
+}
+
+function connectWs(screeningId) {
+  closeWs()
+  if (!screeningId) return
+  const url = wsUrl(screeningId)
+  ws = new WebSocket(url)
+  ws.onmessage = async (ev) => {
+    try {
+      const msg = JSON.parse(ev.data)
+      if (msg.type === 'SEAT_UPDATE' && msg.payload && expandedId.value === screeningId) {
+        const data = await getSeatDetails(screeningId).catch(() => ({ locked: [], booked: [] }))
+        details.value[screeningId] = { locked: data.locked || [], booked: data.booked || [] }
+      }
+    } catch (_) {}
+  }
+}
+
+watch(expandedId, (id) => {
+  if (id) connectWs(id)
+  else closeWs()
+})
+
+onUnmounted(closeWs)
 
 async function toggleDetails(s) {
   if (expandedId.value === s.id) {

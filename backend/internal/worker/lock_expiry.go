@@ -44,6 +44,7 @@ func RunLockExpiry(ctx context.Context, repo *repository.MongoRepo, lockMgr *loc
 				bookings, _ := repo.ListBookings(ctx, bson.M{"screening_id": b.ScreeningID})
 				seat := seatStateFor(b.ScreeningID, bookings, b.SeatRow, b.SeatCol)
 				hub.BroadcastSeatUpdate("screening:"+b.ScreeningID, seat)
+				hub.BroadcastAdmin("REFRESH", nil)
 			}
 		}
 	}

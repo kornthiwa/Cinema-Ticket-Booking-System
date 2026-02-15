@@ -58,6 +58,7 @@ func (h *Handler) LockSeat(c *gin.Context) {
 	}
 	// Broadcast seat update so other users see LOCKED in real-time
 	h.Hub.BroadcastSeatUpdate("screening:"+screeningID, h.seatState(c.Request.Context(), screeningID, []*model.Booking{b}, body.Row, body.Col))
+	h.Hub.BroadcastAdmin("REFRESH", nil)
 	c.JSON(http.StatusOK, gin.H{"lock_id": lockID, "expires_in_seconds": 300, "booking_id": b.ID.Hex()})
 }
 
@@ -104,5 +105,6 @@ func (h *Handler) ConfirmPayment(c *gin.Context) {
 	// Broadcast so seat shows BOOKED
 	bookings, _ := h.Repo.ListBookings(c.Request.Context(), map[string]interface{}{"screening_id": b.ScreeningID})
 	h.Hub.BroadcastSeatUpdate("screening:"+b.ScreeningID, h.seatState(c.Request.Context(), b.ScreeningID, bookings, b.SeatRow, b.SeatCol))
+	h.Hub.BroadcastAdmin("REFRESH", nil)
 	c.JSON(http.StatusOK, gin.H{"status": "confirmed"})
 }

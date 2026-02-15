@@ -104,6 +104,7 @@ func main() {
 	{
 		admin.GET("/bookings", h.ListBookingsAdmin)
 		admin.GET("/audit-logs", h.ListAuditLogs)
+		admin.GET("/ws", h.ServeAdminWS)
 	}
 
 	r.POST("/admin/login", func(c *gin.Context) {

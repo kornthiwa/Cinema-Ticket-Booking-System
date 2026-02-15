@@ -1,7 +1,12 @@
 <template>
   <div class="min-h-screen bg-white font-sans text-stone-800">
-    <nav v-if="token" class="sticky top-0 z-50 border-b border-stone-200 bg-white/95 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+    <nav
+      v-if="token"
+      class="sticky top-0 z-50 border-b border-stone-200 bg-white/95 backdrop-blur"
+    >
+      <div
+        class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6"
+      >
         <div class="flex items-center gap-6">
           <router-link
             to="/screenings"
@@ -17,13 +22,6 @@
             active-class="text-amber-600 font-medium"
           >
             Admin
-          </router-link>
-          <router-link
-            to="/login"
-            class="text-stone-600 transition hover:text-amber-600"
-            @click.prevent="logout"
-          >
-            ไปหน้า Login
           </router-link>
         </div>
         <button
@@ -42,19 +40,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-const token = ref('')
-const role = ref('')
-onMounted(() => {
-  token.value = localStorage.getItem('token')
-  role.value = localStorage.getItem('role')
-})
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user_id')
-  localStorage.removeItem('role')
-  token.value = ''
-  role.value = ''
-  window.location.href = '/login'
+import { ref, onMounted, watch } from "vue";
+import { useRoute } from "vue-router";
+
+const token = ref("");
+const role = ref("");
+const route = useRoute();
+
+function loadAuth() {
+  token.value = localStorage.getItem("token");
+  role.value = localStorage.getItem("role");
 }
+
+onMounted(loadAuth);
+// อัปเดต token/role ตอนเปลี่ยน route (เช่น หลัง login/register ด้วย router.push) เพื่อให้ navbar ขึ้น
+watch(() => route.path, loadAuth);
+const logout = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user_id");
+  localStorage.removeItem("role");
+  token.value = "";
+  role.value = "";
+  window.location.href = "/login";
+};
 </script>

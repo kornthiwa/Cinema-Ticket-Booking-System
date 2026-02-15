@@ -114,6 +114,17 @@
       >
         {{ message }}
       </p>
+
+      <!-- สถานะ WebSocket (Real-time) -->
+      <p
+        v-if="wsStatus !== 'connected'"
+        class="mt-2 text-sm text-stone-500"
+      >
+        <span v-if="wsStatus === 'connecting'">Real-time: กำลังเชื่อมต่อ...</span>
+        <span v-else-if="wsStatus === 'reconnecting'">Real-time: กำลังเชื่อมต่อใหม่...</span>
+        <span v-else-if="wsStatus === 'error'">Real-time: ขาดการเชื่อมต่อ (จะลองใหม่อัตโนมัติ)</span>
+      </p>
+      <p v-else class="mt-2 text-sm text-green-600">Real-time: เชื่อมต่อแล้ว</p>
     </template>
   </div>
 </template>
@@ -133,7 +144,12 @@ const message = ref('')
 const messageType = ref('info')
 const seatDetails = ref({ locked: [], booked: [] })
 const selectedSeat = ref(null)
+const wsStatus = ref('disconnected') // 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 let ws = null
+let reconnectTimer = null
+let reconnectAttempts = 0
+const maxReconnectDelay = 30000
+const initialReconnectDelay = 1000
 
 const flatSeats = computed(() => {
   const s = seats.value
@@ -161,22 +177,62 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (ws) ws.close()
+  wsStatus.value = 'disconnected'
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  if (ws) {
+    ws.onclose = null
+    ws.close()
+    ws = null
+  }
 })
 
+function scheduleReconnect(screeningId) {
+  if (reconnectTimer) return
+  const delay = Math.min(initialReconnectDelay * Math.pow(2, reconnectAttempts), maxReconnectDelay)
+  reconnectAttempts += 1
+  wsStatus.value = 'reconnecting'
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    connectWs(screeningId)
+  }, delay)
+}
+
 function connectWs(id) {
+  if (ws) {
+    ws.onclose = null
+    ws.close()
+    ws = null
+  }
+  wsStatus.value = wsStatus.value === 'reconnecting' ? 'reconnecting' : 'connecting'
   const url = wsUrl(id)
   ws = new WebSocket(url)
-  ws.onmessage = (ev) => {
+  ws.onopen = () => {
+    reconnectAttempts = 0
+    wsStatus.value = 'connected'
+  }
+  ws.onmessage = async (ev) => {
     try {
       const msg = JSON.parse(ev.data)
       if (msg.type === 'SEAT_UPDATE' && msg.payload) {
         updateSeat(msg.payload)
+        // ดึงรายละเอียดล็อก/จองใหม่ เพื่อให้คลิกที่นั่งที่คนอื่นล็อกแล้วเห็น ผู้ล็อก / ล็อกเมื่อ / ปลดล็อคเมื่อ
+        const sid = route.params.id
+        const detailsData = await getSeatDetails(sid).catch(() => ({ locked: [], booked: [] }))
+        seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
       }
     } catch (_) {}
   }
+  ws.onerror = () => {
+    wsStatus.value = 'error'
+  }
   ws.onclose = () => {
     ws = null
+    if (wsStatus.value === 'disconnected') return
+    wsStatus.value = 'error'
+    scheduleReconnect(id)
   }
 }
 

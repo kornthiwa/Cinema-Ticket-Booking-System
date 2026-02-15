@@ -113,6 +113,14 @@ export function wsUrl(screeningId) {
   return token ? `${path}?token=${encodeURIComponent(token)}` : path
 }
 
+/** WebSocket URL for Admin (real-time refresh of bookings & audit logs) */
+export function wsAdminUrl() {
+  const token = localStorage.getItem('token')
+  const host = (import.meta.env.VITE_WS_URL || base || window.location.origin).replace(/^http/, 'ws')
+  const path = `${host.replace(/\/$/, '')}/admin/ws`
+  return token ? `${path}?token=${encodeURIComponent(token)}` : path
+}
+
 // Admin
 export async function adminBookings(params = {}) {
   const q = new URLSearchParams(params).toString()

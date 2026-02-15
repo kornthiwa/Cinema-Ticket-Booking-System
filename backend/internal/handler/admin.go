@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,8 +16,21 @@ func (h *Handler) ListBookingsAdmin(c *gin.Context) {
 	}
 	if screeningID := c.Query("screening_id"); screeningID != "" {
 		filter["screening_id"] = screeningID
-	}
-	if movieID := c.Query("movie_id"); movieID != "" {
+	} else if movieName := strings.TrimSpace(c.Query("movie_name")); movieName != "" {
+		screenings, _ := h.Repo.ListScreenings(c.Request.Context())
+		var ids []string
+		lower := strings.ToLower(movieName)
+		for _, s := range screenings {
+			if strings.Contains(strings.ToLower(s.MovieName), lower) {
+				ids = append(ids, s.ID.Hex())
+			}
+		}
+		if len(ids) > 0 {
+			filter["screening_id"] = bson.M{"$in": ids}
+		} else {
+			filter["screening_id"] = "none"
+		}
+	} else if movieID := c.Query("movie_id"); movieID != "" {
 		screenings, _ := h.Repo.ListScreenings(c.Request.Context())
 		var ids []string
 		for _, s := range screenings {

@@ -52,28 +52,41 @@
     <!-- Bookings -->
     <section class="rounded-xl border border-stone-200 bg-stone-50 p-6">
       <h2 class="mb-4 text-lg font-semibold text-stone-800">Bookings</h2>
-      <div class="mb-4 flex flex-wrap gap-2">
+      <p class="mb-3 text-sm text-stone-500">ค้นหา: User ID, Screening ID, ชื่อหนัง หรือ Movie ID แล้วกด ค้นหา</p>
+      <div class="mb-4 flex flex-wrap items-center gap-2">
         <input
           v-model="filters.user_id"
-          placeholder="User ID"
-          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+          placeholder="User ID (email)"
+          class="min-w-[180px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
         />
         <input
           v-model="filters.screening_id"
           placeholder="Screening ID"
-          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+          class="min-w-[220px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+        />
+        <input
+          v-model="filters.movie_name"
+          placeholder="ชื่อหนัง"
+          class="min-w-[160px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
         />
         <input
           v-model="filters.movie_id"
           placeholder="Movie ID"
-          class="w-32 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
+          class="w-28 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 placeholder-stone-400 outline-none focus:border-amber-500"
         />
         <button
           type="button"
-          class="rounded-lg bg-stone-200 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-300"
+          class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-stone-900 transition hover:bg-amber-400"
           @click="loadBookings"
         >
-          Apply
+          ค้นหา (Apply)
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm text-stone-600 transition hover:bg-stone-100"
+          @click="clearFilters"
+        >
+          ล้าง
         </button>
       </div>
       <p v-if="bookingsLoading" class="flex items-center gap-2 text-stone-500">
@@ -84,6 +97,7 @@
         <table class="w-full min-w-[500px] text-left text-sm">
           <thead class="border-b border-stone-200 bg-stone-100">
             <tr>
+              <th class="px-4 py-3 font-medium text-stone-700">Screening ID</th>
               <th class="px-4 py-3 font-medium text-stone-700">Movie</th>
               <th class="px-4 py-3 font-medium text-stone-700">User ID</th>
               <th class="px-4 py-3 font-medium text-stone-700">Seat</th>
@@ -93,6 +107,7 @@
           </thead>
           <tbody class="divide-y divide-stone-200">
             <tr v-for="row in bookings" :key="row.booking?.id" class="text-stone-600">
+              <td class="px-4 py-3 font-mono text-xs text-stone-600">{{ row.booking?.screening_id || '-' }}</td>
               <td class="px-4 py-3 text-stone-800">{{ row.movie_name || '-' }}</td>
               <td class="px-4 py-3">{{ row.booking?.user_id }}</td>
               <td class="px-4 py-3">{{ row.booking?.seat_row }}-{{ row.booking?.seat_col }}</td>
@@ -120,15 +135,26 @@
         <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
         Loading...
       </p>
-      <ul v-else class="space-y-2">
+      <ul v-else class="space-y-3">
         <li
           v-for="(log, i) in logs"
           :key="i"
-          class="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm"
+          class="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm"
         >
-          <strong class="text-amber-600">{{ log.event }}</strong>
-          <span class="text-stone-600"> {{ JSON.stringify(log.payload) }}</span>
-          <span class="ml-2 text-stone-400">{{ formatDate(log.created_at) }}</span>
+          <div class="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              class="rounded px-2 py-0.5 text-xs font-semibold"
+              :class="eventBadgeClass(log.event)"
+            >
+              {{ log.event }}
+            </span>
+            <span class="text-stone-400">{{ formatDate(log.created_at) }}</span>
+          </div>
+          <div v-if="log.payload && Object.keys(log.payload).length" class="flex flex-wrap gap-x-4 gap-y-1 text-stone-600">
+            <template v-for="(val, key) in log.payload" :key="key">
+              <span><span class="font-medium text-stone-500">{{ key }}:</span> {{ val }}</span>
+            </template>
+          </div>
         </li>
       </ul>
     </section>
@@ -136,21 +162,41 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { adminBookings, adminAuditLogs, createScreening as createScreeningApi } from '../api'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { adminBookings, adminAuditLogs, createScreening as createScreeningApi, wsAdminUrl } from '../api'
 
 const form = ref({ movie_id: '', movie_name: '', screen_at: '', rows: 5, cols: 8 })
 const creating = ref(false)
 const createMessage = ref('')
 const bookings = ref([])
 const bookingsLoading = ref(false)
-const filters = ref({ user_id: '', screening_id: '', movie_id: '' })
+const filters = ref({ user_id: '', screening_id: '', movie_name: '', movie_id: '' })
 const logs = ref([])
 const logsLoading = ref(false)
+let ws = null
 
 onMounted(() => {
   loadBookings()
   loadLogs()
+  const url = wsAdminUrl()
+  ws = new WebSocket(url)
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data)
+      if (msg.type === 'REFRESH') {
+        loadBookings()
+        loadLogs()
+      }
+    } catch (_) {}
+  }
+})
+
+onUnmounted(() => {
+  if (ws) {
+    ws.onclose = null
+    ws.close()
+    ws = null
+  }
 })
 
 async function createScreening() {
@@ -178,15 +224,25 @@ async function loadBookings() {
   bookingsLoading.value = true
   try {
     const q = {}
-    if (filters.value.user_id) q.user_id = filters.value.user_id
-    if (filters.value.screening_id) q.screening_id = filters.value.screening_id
-    if (filters.value.movie_id) q.movie_id = filters.value.movie_id
+    const u = (filters.value.user_id || '').trim()
+    const s = (filters.value.screening_id || '').trim()
+    const name = (filters.value.movie_name || '').trim()
+    const m = (filters.value.movie_id || '').trim()
+    if (u) q.user_id = u
+    if (s) q.screening_id = s
+    if (name) q.movie_name = name
+    if (m) q.movie_id = m
     bookings.value = await adminBookings(q)
   } catch {
     bookings.value = []
   } finally {
     bookingsLoading.value = false
   }
+}
+
+function clearFilters() {
+  filters.value = { user_id: '', screening_id: '', movie_name: '', movie_id: '' }
+  loadBookings()
 }
 
 async function loadLogs() {
@@ -204,5 +260,15 @@ async function loadLogs() {
 function formatDate(d) {
   if (!d) return ''
   return new Date(d).toLocaleString()
+}
+
+function eventBadgeClass(event) {
+  if (!event) return 'bg-stone-200 text-stone-600'
+  const e = String(event)
+  if (e === 'BOOKING_SUCCESS') return 'bg-green-100 text-green-800'
+  if (e === 'BOOKING_TIMEOUT') return 'bg-amber-100 text-amber-800'
+  if (e === 'SEAT_RELEASED') return 'bg-sky-100 text-sky-800'
+  if (e === 'LOCK_FAIL') return 'bg-red-100 text-red-800'
+  return 'bg-stone-100 text-stone-700'
 }
 </script>

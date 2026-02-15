@@ -75,6 +75,8 @@ func (h *Hub) Run() {
 	}
 }
 
+const AdminRoom = "admin"
+
 func (h *Hub) BroadcastSeatUpdate(room string, payload interface{}) {
 	msg := Message{Type: "SEAT_UPDATE", Payload: payload}
 	b, err := json.Marshal(msg)
@@ -86,6 +88,21 @@ func (h *Hub) BroadcastSeatUpdate(room string, payload interface{}) {
 	case h.broadcast <- roomMessage{Room: room, Msg: b}:
 	default:
 		log.Printf("ws: broadcast buffer full for room %s", room)
+	}
+}
+
+// BroadcastAdmin sends a message to all clients in the admin room (e.g. REFRESH for live bookings/audit).
+func (h *Hub) BroadcastAdmin(msgType string, payload interface{}) {
+	msg := Message{Type: msgType, Payload: payload}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("ws: marshal admin: %v", err)
+		return
+	}
+	select {
+	case h.broadcast <- roomMessage{Room: AdminRoom, Msg: b}:
+	default:
+		log.Printf("ws: broadcast buffer full for room %s", AdminRoom)
 	}
 }
 
