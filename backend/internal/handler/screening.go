@@ -14,6 +14,7 @@ type SeatLockInfo struct {
 	Row       int       `json:"row"`
 	Col       int       `json:"col"`
 	UserID    string    `json:"user_id"`
+	BookingID string    `json:"booking_id,omitempty"`
 	LockedAt  time.Time `json:"locked_at"`
 	UnlocksAt time.Time `json:"unlocks_at"`
 }
@@ -98,7 +99,7 @@ func (h *Handler) GetSeatDetails(c *gin.Context) {
 				unlocksAt := b.CreatedAt.Add(ttl)
 				locked = append(locked, SeatLockInfo{
 					Row: b.SeatRow, Col: b.SeatCol, UserID: b.UserID,
-					LockedAt: b.CreatedAt, UnlocksAt: unlocksAt,
+					BookingID: b.ID.Hex(), LockedAt: b.CreatedAt, UnlocksAt: unlocksAt,
 				})
 			}
 		}

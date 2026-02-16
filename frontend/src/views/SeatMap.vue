@@ -1,8 +1,14 @@
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-stone-800 sm:text-3xl">{{ screening?.movie_name }}</h1>
-    <p v-if="screening" class="mt-1 text-stone-500">{{ formatDate(screening.screen_at) }}</p>
-    <p v-if="!loading && !screening" class="mt-4 text-stone-500">Screening not found.</p>
+    <h1 class="text-2xl font-bold text-stone-800 sm:text-3xl">
+      {{ screening?.movie_name }}
+    </h1>
+    <p v-if="screening" class="mt-1 text-stone-500">
+      {{ formatDate(screening.screen_at) }}
+    </p>
+    <p v-if="!loading && !screening" class="mt-4 text-stone-500">
+      Screening not found.
+    </p>
 
     <template v-else-if="screening">
       <div class="mb-6 mt-6 flex flex-wrap gap-6 text-sm text-stone-600">
@@ -19,7 +25,9 @@
 
       <div
         class="mb-8 inline-grid gap-1.5"
-        :style="{ gridTemplateColumns: `repeat(${screening.cols}, minmax(0, 1fr))` }"
+        :style="{
+          gridTemplateColumns: `repeat(${screening.cols}, minmax(0, 1fr))`,
+        }"
       >
         <button
           v-for="seat in flatSeats"
@@ -27,13 +35,27 @@
           type="button"
           class="seat h-9 w-9 rounded-lg border text-xs font-medium transition sm:h-10 sm:w-10"
           :class="{
-            'cursor-pointer border-green-600 bg-green-500 text-stone-900 hover:bg-green-400': seat.status === 'AVAILABLE' && !(myLock && myLock.row === seat.row && myLock.col === seat.col),
-            'cursor-pointer border-amber-600 bg-amber-500 text-stone-900 opacity-90 hover:opacity-100': seat.status === 'LOCKED',
-            'cursor-pointer border-stone-500 bg-stone-500 text-stone-200 hover:bg-stone-600': seat.status === 'BOOKED',
-            'cursor-not-allowed': seat.status === 'AVAILABLE' && myLock && myLock.row === seat.row && myLock.col === seat.col,
-            'ring-2 ring-amber-500 ring-offset-2 ring-offset-white': myLock && myLock.row === seat.row && myLock.col === seat.col,
+            'cursor-pointer border-green-600 bg-green-500 text-stone-900 hover:bg-green-400':
+              seat.status === 'AVAILABLE' &&
+              !(myLock && myLock.row === seat.row && myLock.col === seat.col),
+            'cursor-pointer border-amber-600 bg-amber-500 text-stone-900 opacity-90 hover:opacity-100':
+              seat.status === 'LOCKED',
+            'cursor-pointer border-stone-500 bg-stone-500 text-stone-200 hover:bg-stone-600':
+              seat.status === 'BOOKED',
+            'cursor-not-allowed':
+              seat.status === 'AVAILABLE' &&
+              myLock &&
+              myLock.row === seat.row &&
+              myLock.col === seat.col,
+            'ring-2 ring-amber-500 ring-offset-2 ring-offset-white':
+              myLock && myLock.row === seat.row && myLock.col === seat.col,
           }"
-          :disabled="seat.status === 'AVAILABLE' && myLock && myLock.row === seat.row && myLock.col === seat.col"
+          :disabled="
+            seat.status === 'AVAILABLE' &&
+            myLock &&
+            myLock.row === seat.row &&
+            myLock.col === seat.col
+          "
           :title="seat.status !== 'AVAILABLE' ? 'คลิกดูรายละเอียด' : ''"
           @click="onSeat(seat)"
         >
@@ -49,8 +71,15 @@
         <div class="mb-2 flex items-center justify-between">
           <span class="font-medium text-stone-800">
             ที่นั่ง {{ selectedSeat.row + 1 }}-{{ selectedSeat.col + 1 }}
-            <span class="ml-2 rounded px-2 py-0.5 text-xs" :class="selectedSeat.status === 'LOCKED' ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-700'">
-              {{ selectedSeat.status === 'LOCKED' ? 'ล็อก' : 'จองแล้ว' }}
+            <span
+              class="ml-2 rounded px-2 py-0.5 text-xs"
+              :class="
+                selectedSeat.status === 'LOCKED'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-stone-200 text-stone-700'
+              "
+            >
+              {{ selectedSeat.status === "LOCKED" ? "ล็อก" : "จองแล้ว" }}
             </span>
           </span>
           <button
@@ -63,40 +92,73 @@
           </button>
         </div>
         <p class="text-sm text-stone-600">
-          <span class="font-medium">ผู้{{ selectedSeat.status === 'LOCKED' ? 'ล็อก' : 'จอง' }}:</span>
+          <span class="font-medium"
+            >ผู้{{ selectedSeat.status === "LOCKED" ? "ล็อก" : "จอง" }}:</span
+          >
           {{ selectedSeat.user_id }}
         </p>
-        <p v-if="selectedSeat.status === 'LOCKED'" class="mt-1 text-sm text-stone-600">
-          <span class="font-medium">ล็อกเมื่อ:</span> {{ formatDate(selectedSeat.locked_at) }}
+        <p
+          v-if="selectedSeat.status === 'LOCKED'"
+          class="mt-1 text-sm text-stone-600"
+        >
+          <span class="font-medium">ล็อกเมื่อ:</span>
+          {{ formatDate(selectedSeat.locked_at) }}
         </p>
-        <p v-if="selectedSeat.status === 'LOCKED'" class="mt-0.5 text-sm text-stone-600">
-          <span class="font-medium">ปลดล็อคเมื่อ:</span> {{ formatDate(selectedSeat.unlocks_at) }}
+        <p
+          v-if="selectedSeat.status === 'LOCKED'"
+          class="mt-0.5 text-sm text-stone-600"
+        >
+          <span class="font-medium">ปลดล็อคเมื่อ:</span>
+          {{ formatDate(selectedSeat.unlocks_at) }}
         </p>
-        <p v-if="selectedSeat.status === 'BOOKED' && selectedSeat.booked_at" class="mt-1 text-sm text-stone-600">
-          <span class="font-medium">จองเมื่อ:</span> {{ formatDate(selectedSeat.booked_at) }}
+        <p
+          v-if="selectedSeat.status === 'BOOKED' && selectedSeat.booked_at"
+          class="mt-1 text-sm text-stone-600"
+        >
+          <span class="font-medium">จองเมื่อ:</span>
+          {{ formatDate(selectedSeat.booked_at) }}
         </p>
       </div>
 
       <div
-        v-if="myLock"
+        v-if="myLockedSeats.length > 0"
         class="mb-6 rounded-xl border border-stone-200 bg-stone-50 p-5"
       >
-        <p class="mb-4 text-stone-700">
-          Seat <strong>{{ myLock.row + 1 }}-{{ myLock.col + 1 }}</strong> locked. Pay within 5 minutes.
+        <p class="mb-3 text-stone-700">
+          ที่นั่งที่คุณล็อก — ชำระภายใน 5 นาที
         </p>
+        <ul class="mb-4 space-y-2">
+          <li
+            v-for="item in myLockedSeats"
+            :key="item.booking_id"
+            class="flex items-center gap-2"
+          >
+            <input
+              type="checkbox"
+              :checked="confirmSelectedIds.includes(item.booking_id)"
+              :disabled="confirming"
+              class="h-4 w-4 rounded border-stone-300 text-amber-500"
+              @change="toggleConfirmSelected(item.booking_id)"
+            />
+            <span class="text-sm text-stone-700">
+              ที่นั่ง {{ item.row + 1 }}-{{ item.col + 1 }}
+            </span>
+          </li>
+        </ul>
         <div class="flex flex-wrap gap-3">
           <button
             type="button"
-            :disabled="confirming"
+            :disabled="confirming || confirmSelectedIds.length === 0"
             class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-stone-900 transition hover:bg-amber-400 disabled:opacity-60"
             @click="confirmPay"
           >
-            {{ confirming ? 'Processing...' : 'Confirm payment (mock)' }}
+            {{ confirming ? "Processing..." : "Confirm payment (mock)" }}
           </button>
           <button
             type="button"
             class="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-            @click="myLock = null"
+            :disabled="confirming"
+            @click="myLock = null; confirmSelectedIds = []"
           >
             Cancel
           </button>
@@ -116,13 +178,16 @@
       </p>
 
       <!-- สถานะ WebSocket (Real-time) -->
-      <p
-        v-if="wsStatus !== 'connected'"
-        class="mt-2 text-sm text-stone-500"
-      >
-        <span v-if="wsStatus === 'connecting'">Real-time: กำลังเชื่อมต่อ...</span>
-        <span v-else-if="wsStatus === 'reconnecting'">Real-time: กำลังเชื่อมต่อใหม่...</span>
-        <span v-else-if="wsStatus === 'error'">Real-time: ขาดการเชื่อมต่อ (จะลองใหม่อัตโนมัติ)</span>
+      <p v-if="wsStatus !== 'connected'" class="mt-2 text-sm text-stone-500">
+        <span v-if="wsStatus === 'connecting'"
+          >Real-time: กำลังเชื่อมต่อ...</span
+        >
+        <span v-else-if="wsStatus === 'reconnecting'"
+          >Real-time: กำลังเชื่อมต่อใหม่...</span
+        >
+        <span v-else-if="wsStatus === 'error'"
+          >Real-time: ขาดการเชื่อมต่อ (จะลองใหม่อัตโนมัติ)</span
+        >
       </p>
       <p v-else class="mt-2 text-sm text-green-600">Real-time: เชื่อมต่อแล้ว</p>
     </template>
@@ -130,185 +195,274 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { getScreening, getSeatMap, getSeatDetails, lockSeat, confirmPayment, wsUrl } from '../api'
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { useRoute } from "vue-router";
+import {
+  getScreening,
+  getSeatMap,
+  getSeatDetails,
+  lockSeat,
+  confirmPayment,
+  wsUrl,
+} from "../api";
 
-const route = useRoute()
-const screening = ref(null)
-const seats = ref([])
-const loading = ref(true)
-const myLock = ref(null)
-const confirming = ref(false)
-const message = ref('')
-const messageType = ref('info')
-const seatDetails = ref({ locked: [], booked: [] })
-const selectedSeat = ref(null)
-const wsStatus = ref('disconnected') // 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-let ws = null
-let reconnectTimer = null
-let reconnectAttempts = 0
-const maxReconnectDelay = 30000
-const initialReconnectDelay = 1000
+const route = useRoute();
+const screening = ref(null);
+const seats = ref([]);
+const loading = ref(true);
+const myLock = ref(null);
+const confirming = ref(false);
+const confirmSelectedIds = ref([]);
+const currentUserId = ref(
+  typeof localStorage !== "undefined" ? localStorage.getItem("user_id") || "" : ""
+);
+const message = ref("");
+const messageType = ref("info");
+const seatDetails = ref({ locked: [], booked: [] });
+const selectedSeat = ref(null);
+const wsStatus = ref("disconnected"); // 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+let ws = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+const maxReconnectDelay = 30000;
+const initialReconnectDelay = 1000;
 
 const flatSeats = computed(() => {
-  const s = seats.value
-  if (!s || !s.length) return []
-  return s.flat()
-})
+  const s = seats.value;
+  if (!s || !s.length) return [];
+  return s.flat();
+});
+
+const myLockedSeats = computed(() => {
+  const locked = seatDetails.value.locked || [];
+  const uid = currentUserId.value;
+  return locked.filter(
+    (x) => x.user_id === uid && x.booking_id
+  );
+});
+
+watch(
+  myLockedSeats,
+  (list) => {
+    if (list.length > 0 && confirmSelectedIds.value.length === 0) {
+      confirmSelectedIds.value = list.map((x) => x.booking_id);
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(async () => {
-  const id = route.params.id
+  const id = route.params.id;
   try {
-    screening.value = await getScreening(id)
+    screening.value = await getScreening(id);
     const [mapData, detailsData] = await Promise.all([
       getSeatMap(id),
       getSeatDetails(id).catch(() => ({ locked: [], booked: [] })),
-    ])
-    seats.value = mapData.seats || []
-    seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
-    connectWs(id)
+    ]);
+    seats.value = mapData.seats || [];
+    seatDetails.value = {
+      locked: detailsData.locked || [],
+      booked: detailsData.booked || [],
+    };
+    connectWs(id);
   } catch (e) {
-    message.value = e.message
-    messageType.value = 'error'
+    message.value = e.message;
+    messageType.value = "error";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 onUnmounted(() => {
-  wsStatus.value = 'disconnected'
+  wsStatus.value = "disconnected";
   if (reconnectTimer) {
-    clearTimeout(reconnectTimer)
-    reconnectTimer = null
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
   if (ws) {
-    ws.onclose = null
-    ws.close()
-    ws = null
+    ws.onclose = null;
+    ws.close();
+    ws = null;
   }
-})
+});
 
 function scheduleReconnect(screeningId) {
-  if (reconnectTimer) return
-  const delay = Math.min(initialReconnectDelay * Math.pow(2, reconnectAttempts), maxReconnectDelay)
-  reconnectAttempts += 1
-  wsStatus.value = 'reconnecting'
+  if (reconnectTimer) return;
+  const delay = Math.min(
+    initialReconnectDelay * Math.pow(2, reconnectAttempts),
+    maxReconnectDelay,
+  );
+  reconnectAttempts += 1;
+  wsStatus.value = "reconnecting";
   reconnectTimer = setTimeout(() => {
-    reconnectTimer = null
-    connectWs(screeningId)
-  }, delay)
+    reconnectTimer = null;
+    connectWs(screeningId);
+  }, delay);
 }
 
 function connectWs(id) {
   if (ws) {
-    ws.onclose = null
-    ws.close()
-    ws = null
+    ws.onclose = null;
+    ws.close();
+    ws = null;
   }
-  wsStatus.value = wsStatus.value === 'reconnecting' ? 'reconnecting' : 'connecting'
-  const url = wsUrl(id)
-  ws = new WebSocket(url)
+  wsStatus.value =
+    wsStatus.value === "reconnecting" ? "reconnecting" : "connecting";
+  const url = wsUrl(id);
+  ws = new WebSocket(url);
   ws.onopen = () => {
-    reconnectAttempts = 0
-    wsStatus.value = 'connected'
-  }
+    reconnectAttempts = 0;
+    wsStatus.value = "connected";
+  };
   ws.onmessage = async (ev) => {
     try {
-      const msg = JSON.parse(ev.data)
-      if (msg.type === 'SEAT_UPDATE' && msg.payload) {
-        updateSeat(msg.payload)
+      const msg = JSON.parse(ev.data);
+      if (msg.type === "SEAT_UPDATE" && msg.payload) {
+        updateSeat(msg.payload);
         // ดึงรายละเอียดล็อก/จองใหม่ เพื่อให้คลิกที่นั่งที่คนอื่นล็อกแล้วเห็น ผู้ล็อก / ล็อกเมื่อ / ปลดล็อคเมื่อ
-        const sid = route.params.id
-        const detailsData = await getSeatDetails(sid).catch(() => ({ locked: [], booked: [] }))
-        seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
+        const sid = route.params.id;
+        const detailsData = await getSeatDetails(sid).catch(() => ({
+          locked: [],
+          booked: [],
+        }));
+        seatDetails.value = {
+          locked: detailsData.locked || [],
+          booked: detailsData.booked || [],
+        };
       }
-      if (msg.type === 'NOTIFICATION' && msg.payload) {
-        const { eventType } = msg.payload
-        if (eventType === 'BOOKING_SUCCESS') {
-          setMessage('การจองสำเร็จ', 'success')
+      if (msg.type === "NOTIFICATION" && msg.payload) {
+        const { eventType } = msg.payload;
+        if (eventType === "BOOKING_SUCCESS") {
+          setMessage("การจองสำเร็จ", "success");
         }
-        if (eventType === 'SEAT_RELEASED') {
-          setMessage('มีการปล่อยที่นั่ง', 'info')
+        if (eventType === "SEAT_RELEASED") {
+          setMessage("มีการปล่อยที่นั่ง", "info");
         }
       }
     } catch (_) {}
-  }
+  };
   ws.onerror = () => {
-    wsStatus.value = 'error'
-  }
+    wsStatus.value = "error";
+  };
   ws.onclose = () => {
-    ws = null
-    if (wsStatus.value === 'disconnected') return
-    wsStatus.value = 'error'
-    scheduleReconnect(id)
-  }
+    ws = null;
+    if (wsStatus.value === "disconnected") return;
+    wsStatus.value = "error";
+    scheduleReconnect(id);
+  };
 }
 
 function updateSeat(payload) {
-  const { row, col } = payload
-  if (!seats.value[row]) return
-  if (!seats.value[row][col]) return
-  seats.value[row][col] = { ...seats.value[row][col], ...payload }
+  const { row, col } = payload;
+  if (!seats.value[row]) return;
+  if (!seats.value[row][col]) return;
+  seats.value[row][col] = { ...seats.value[row][col], ...payload };
 }
 
 async function onSeat(seat) {
-  if (seat.status === 'LOCKED') {
-    const d = seatDetails.value.locked.find((x) => x.row === seat.row && x.col === seat.col)
-    selectedSeat.value = d ? { ...d, status: 'LOCKED' } : { row: seat.row, col: seat.col, status: 'LOCKED', user_id: seat.user_id || '-' }
-    return
+  if (seat.status === "LOCKED") {
+    const d = seatDetails.value.locked.find(
+      (x) => x.row === seat.row && x.col === seat.col,
+    );
+    selectedSeat.value = d
+      ? { ...d, status: "LOCKED" }
+      : {
+          row: seat.row,
+          col: seat.col,
+          status: "LOCKED",
+          user_id: seat.user_id || "-",
+        };
+    return;
   }
-  if (seat.status === 'BOOKED') {
-    const d = seatDetails.value.booked.find((x) => x.row === seat.row && x.col === seat.col)
-    selectedSeat.value = d ? { ...d, status: 'BOOKED' } : { row: seat.row, col: seat.col, status: 'BOOKED', user_id: seat.user_id || '-' }
-    return
+  if (seat.status === "BOOKED") {
+    const d = seatDetails.value.booked.find(
+      (x) => x.row === seat.row && x.col === seat.col,
+    );
+    selectedSeat.value = d
+      ? { ...d, status: "BOOKED" }
+      : {
+          row: seat.row,
+          col: seat.col,
+          status: "BOOKED",
+          user_id: seat.user_id || "-",
+        };
+    return;
   }
-  if (seat.status !== 'AVAILABLE') return
-  message.value = ''
-  selectedSeat.value = null
+  if (seat.status !== "AVAILABLE") return;
+  message.value = "";
+  selectedSeat.value = null;
   try {
-    const res = await lockSeat(route.params.id, seat.row, seat.col)
-    myLock.value = { row: seat.row, col: seat.col, bookingId: res.booking_id }
-    setMessage('Seat locked. Confirm payment within 5 minutes.', 'success')
-    const data = await getSeatMap(route.params.id)
-    seats.value = data.seats || []
-    const detailsData = await getSeatDetails(route.params.id).catch(() => ({}))
-    seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
+    const res = await lockSeat(route.params.id, seat.row, seat.col);
+    myLock.value = { row: seat.row, col: seat.col, bookingId: res.booking_id };
+    if (res.booking_id && !confirmSelectedIds.value.includes(res.booking_id)) {
+      confirmSelectedIds.value = [...confirmSelectedIds.value, res.booking_id];
+    }
+    setMessage("Seat locked. Confirm payment within 5 minutes.", "success");
+    const data = await getSeatMap(route.params.id);
+    seats.value = data.seats || [];
+    const detailsData = await getSeatDetails(route.params.id).catch(() => ({}));
+    seatDetails.value = {
+      locked: detailsData.locked || [],
+      booked: detailsData.booked || [],
+    };
   } catch (e) {
-    setMessage(e.message, 'error')
+    setMessage(e.message, "error");
+  }
+}
+
+function toggleConfirmSelected(bookingId) {
+  const idx = confirmSelectedIds.value.indexOf(bookingId);
+  if (idx >= 0) {
+    confirmSelectedIds.value = confirmSelectedIds.value.filter((_, i) => i !== idx);
+  } else {
+    confirmSelectedIds.value = [...confirmSelectedIds.value, bookingId];
   }
 }
 
 async function confirmPay() {
-  if (!myLock.value?.bookingId) return
-  confirming.value = true
-  message.value = ''
+  if (confirmSelectedIds.value.length === 0) return;
+  confirming.value = true;
+  message.value = "";
   try {
-    await confirmPayment(myLock.value.bookingId)
-    setMessage('Booking confirmed.', 'success')
-    myLock.value = null
-    selectedSeat.value = null
+    for (const bookingId of confirmSelectedIds.value) {
+      await confirmPayment(bookingId);
+    }
+    setMessage(
+      confirmSelectedIds.value.length === 1
+        ? "Booking confirmed."
+        : `Confirmed ${confirmSelectedIds.value.length} bookings.`,
+      "success"
+    );
+    myLock.value = null;
+    selectedSeat.value = null;
+    confirmSelectedIds.value = [];
     const [mapData, detailsData] = await Promise.all([
       getSeatMap(route.params.id),
       getSeatDetails(route.params.id).catch(() => ({ locked: [], booked: [] })),
-    ])
-    seats.value = mapData.seats || []
-    seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
+    ]);
+    seats.value = mapData.seats || [];
+    seatDetails.value = {
+      locked: detailsData.locked || [],
+      booked: detailsData.booked || [],
+    };
   } catch (e) {
-    setMessage(e.message, 'error')
+    setMessage(e.message, "error");
   } finally {
-    confirming.value = false
+    confirming.value = false;
   }
 }
 
 function setMessage(text, type) {
-  message.value = text
-  messageType.value = type || 'info'
-  if (text) setTimeout(() => { message.value = '' }, 5000)
+  message.value = text;
+  messageType.value = type || "info";
+  if (text)
+    setTimeout(() => {
+      message.value = "";
+    }, 5000);
 }
 
 function formatDate(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleString()
+  if (!d) return "";
+  return new Date(d).toLocaleString();
 }
 </script>
