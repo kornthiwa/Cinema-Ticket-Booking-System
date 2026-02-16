@@ -223,6 +223,15 @@ function connectWs(id) {
         const detailsData = await getSeatDetails(sid).catch(() => ({ locked: [], booked: [] }))
         seatDetails.value = { locked: detailsData.locked || [], booked: detailsData.booked || [] }
       }
+      if (msg.type === 'NOTIFICATION' && msg.payload) {
+        const { eventType } = msg.payload
+        if (eventType === 'BOOKING_SUCCESS') {
+          setMessage('การจองสำเร็จ', 'success')
+        }
+        if (eventType === 'SEAT_RELEASED') {
+          setMessage('มีการปล่อยที่นั่ง', 'info')
+        }
+      }
     } catch (_) {}
   }
   ws.onerror = () => {

@@ -58,6 +58,14 @@ func main() {
 		onAudit(ev.Type, ev.Payload)
 		if ev.Type == "BOOKING_SUCCESS" {
 			log.Printf("[MQ] Booking success notification (mock): %+v", ev.Payload)
+			if sid, ok := ev.Payload["screening_id"].(string); ok {
+				hub.BroadcastNotification("screening:"+sid, ev.Type, ev.Payload)
+			}
+		}
+		if ev.Type == "SEAT_RELEASED" {
+			if sid, ok := ev.Payload["screening_id"].(string); ok {
+				hub.BroadcastNotification("screening:"+sid, ev.Type, ev.Payload)
+			}
 		}
 	})
 	go sub.Run(ctx)

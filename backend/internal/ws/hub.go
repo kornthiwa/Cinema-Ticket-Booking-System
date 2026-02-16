@@ -106,5 +106,26 @@ func (h *Hub) BroadcastAdmin(msgType string, payload interface{}) {
 	}
 }
 
+// BroadcastNotification sends a NOTIFICATION message to a room (e.g. screening:<id>) for frontend to show toast.
+func (h *Hub) BroadcastNotification(room string, eventType string, payload interface{}) {
+	msg := Message{
+		Type: "NOTIFICATION",
+		Payload: map[string]interface{}{
+			"eventType": eventType,
+			"payload":   payload,
+		},
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("ws: marshal notification: %v", err)
+		return
+	}
+	select {
+	case h.broadcast <- roomMessage{Room: room, Msg: b}:
+	default:
+		log.Printf("ws: broadcast buffer full for room %s", room)
+	}
+}
+
 func (h *Hub) Register(c *Client) { h.register <- c }
 func (h *Hub) Unregister(c *Client) { h.unregister <- c }
