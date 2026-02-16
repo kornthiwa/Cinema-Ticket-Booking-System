@@ -1,145 +1,158 @@
-# Cinema Ticket Booking System
+# ระบบจองตั๋วหนังออนไลน์ (Cinema Ticket Booking)
 
-Take-Home Assignment: ระบบจองตั๋วหนังออนไลน์ — ออกแบบให้รองรับการแย่งกันซื้อ (Real-time seat map, Redis Distributed Lock, WebSocket, Message Queue)
+โปรเจกต์ Take-Home: ระบบจองตั๋วหนังที่รองรับการแย่งกันซื้อ — มีผังที่นั่งอัปเดตแบบ real-time, ล็อกที่นั่งด้วย Redis, แจ้งเตือนบนหน้าเว็บผ่าน Message Queue
 
 ---
 
-## 1. System Architecture Diagram
+## ระบบทำอะไรบ้าง
+
+- **ผู้ใช้ทั่วไป:** ล็อกอิน → เลือกรอบฉาย → เห็นผังที่นั่งอัปเดตทันที → เลือกที่นั่ง (ระบบจะล็อกไว้ 5 นาที) → กดชำระเงิน → จองเสร็จแล้วจะเห็นข้อความแจ้งเตือนบนหน้าเว็บ
+- **แอดมิน:** ล็อกอิน → ดูรายการจอง (กรองได้) / ดู Audit Log / สร้างรอบฉาย
+- **ระบบหลังบ้าน:** รับ API, ส่งข้อมูล real-time ผ่าน WebSocket, ใช้ Redis ล็อกที่นั่งและส่งเหตุการณ์ (จองสำเร็จ/ปล่อยที่นั่ง) ไปบันทึก log และแจ้งเตือนที่ frontend
+
+---
+
+## 1. สถาปัตยกรรมระบบ (ภาพรวม)
 
 ```
-                    ┌─────────────────────────────────────────────────────────┐
-                    │                     Docker Compose                       │
-  Browser           │                                                         │
-     │              │  ┌──────────┐     ┌─────────┐     ┌─────────┐           │
-     │  :80         │  │  nginx   │────▶│ Backend │────▶│ MongoDB │           │
-     └──────────────┼─▶│ (Vue SPA │     │  (Gin)  │     │  (DB)   │           │
-                    │  │ + proxy) │     └────┬────┘     └─────────┘           │
-                    │  └──────────┘          │                                 │
-                    │                        │  Lock / Pub-Sub                  │
-                    │                        ▼                                 │
-                    │                   ┌─────────┐                            │
-                    │                   │  Redis  │  ◀── Worker (lock expiry)  │
-                    │                   └─────────┘                            │
-                    │                        │                                 │
-                    │              WebSocket │  Real-time seat updates         │
-                    └───────────────────────┼─────────────────────────────────┘
-                                            │
-                              Frontend (Vue 3) ◀── WS + REST
+  Browser                    Docker Compose
+     │                              │
+     │  :80    ┌──────────┐    ┌─────────┐    ┌─────────┐
+     └────────▶│  nginx   │───▶│ Backend │───▶│ MongoDB │  (เก็บข้อมูลถาวร)
+               │ (Vue +   │    │  (Gin)  │    └─────────┘
+               │  proxy)  │    └────┬────┘
+               └──────────┘         │
+                                    │  ล็อกที่นั่ง / ส่งเหตุการณ์
+                                    ▼
+                               ┌─────────┐
+                               │  Redis  │  ◀── Worker ปล่อยล็อกเมื่อหมดเวลา
+                               └────┬────┘
+                                    │
+                    WebSocket (ผังที่นั่ง + แจ้งเตือน)
+                                    │
+                                    ▼
+               Frontend (Vue 3) ◀── รับข้อมูลแบบ real-time
 ```
 
-- **User:** Login → เลือกรอบฉาย → เห็นผังที่นั่ง Real-time (WebSocket) → เลือกที่นั่ง (Lock) → ชำระเงิน → BOOKED
-- **Admin:** Login → Dashboard (Bookings + Filter) / Audit Logs / สร้างรอบฉาย
-- **Backend:** REST API, WebSocket Hub, Redis Lock, Redis Pub-Sub subscriber (Audit + Mock Notification), Lock Expiry Worker
+- **nginx:** รับคำขอจาก browser แล้วส่งไป backend หรือส่งไฟล์ Vue
+- **Backend (Gin):** ประมวลผลจอง, ล็อกที่นั่งผ่าน Redis, บันทึกลง MongoDB, ส่งเหตุการณ์ไป Redis (MQ)
+- **Redis:** ใช้ล็อกที่นั่ง (กันจองซ้ำ) และเป็นช่องส่งเหตุการณ์ (Pub-Sub) ให้ส่วนอื่นบันทึก log และแจ้งเตือนที่ frontend
+- **Worker:** ตรวจเป็นระยะว่ามีการจองที่ค้างเกิน 5 นาทีไหม ถ้าหมดเวลาแล้วจะปล่อยล็อกและแจ้งระบบ
 
 ---
 
-## 2. Tech Stack Overview
+## 2. เทคโนโลยีที่ใช้
 
-| Layer        | Technology                          |
-|-------------|--------------------------------------|
-| Backend     | Go (Gin)                             |
-| Frontend    | Vue 3, Vue Router, Vite              |
-| Database    | MongoDB                              |
-| Cache/Lock  | Redis (Distributed Lock เท่านั้น ไม่ใช้เป็น cache) |
-| Realtime    | WebSocket                            |
-| Message Queue | Redis Pub-Sub                      |
-| Auth        | JWT (mock); Production ใช้ Google OAuth / Firebase ได้ |
-| Deployment  | Docker + docker-compose.yml          |
-
----
-
-## 3. Booking Flow (อธิบายทีละ Step)
-
-| Step | ผู้ใช้ | ระบบ (Backend) |
-|------|--------|-----------------|
-| 1 | เลือกที่นั่งบนผัง | รับ request lock ที่นั่ง |
-| 2 | — | **Redis Distributed Lock:** `SET key NX EX 300` (5 นาที), key = `seat_lock:{screeningID}:{row}:{col}`, value = lock_id (UUID) |
-| 3 | — | ถ้า lock สำเร็จ → สถานะที่นั่งเป็น **LOCKED**, broadcast ผ่าน WebSocket ให้ทุก client เห็นแบบ Real-time; ถ้า lock ไม่ได้ (มีคนถืออยู่) → คืน error |
-| 4 | เห็นที่นั่งเป็น LOCKED (และผู้ใช้คนอื่นเห็นเช่นกัน) | — |
-| 5 | กด "Confirm payment" ภายใน 5 นาที | ตรวจสอบ lock_id ตรงกับที่ถืออยู่ → อัปเดต booking เป็น **CONFIRMED** (ที่นั่งเป็น **BOOKED**) → ปล่อย lock (Lua script ลบ key ถ้า value ตรง) → Publish `BOOKING_SUCCESS` ไป MQ |
-| 6a | ไม่ชำระภายใน 5 นาที | **Worker (Lock Expiry):** เจอ PENDING หมดอายุ → ปล่อย Redis lock → อัปเดต booking เป็น TIMEOUT → Publish `SEAT_RELEASED` → Broadcast ผังใหม่ผ่าน WebSocket |
-| 6b | — | MQ Subscriber: รับ event → บันทึก **Audit Log** (MongoDB) + Mock Notification (log) |
-
-ผลลัพธ์: **ไม่มี Double Booking** — ที่นั่งเดียวกันจะ lock ได้เพียงหนึ่ง client ในช่วง 5 นาที
+| ส่วน             | เทคโนโลยี               | หมายเหตุ                                                         |
+| ---------------- | ----------------------- | ---------------------------------------------------------------- |
+| Backend          | Go (Gin)                | รับ API และ WebSocket                                            |
+| Frontend         | Vue 3, Vue Router, Vite | หน้าเว็บที่ผู้ใช้เห็น                                            |
+| ฐานข้อมูล        | MongoDB                 | เก็บรอบฉาย, การจอง, audit log                                    |
+| ล็อก / เหตุการณ์ | Redis                   | ล็อกที่นั่ง + ส่งเหตุการณ์ (ไม่ใช้เป็น cache หน้าเว็บ)           |
+| Real-time        | WebSocket               | อัปเดตผังที่นั่งและแจ้งเตือนทันที                                |
+| Message Queue    | Redis Pub-Sub           | ส่งเหตุการณ์จองสำเร็จ/ปล่อยที่นั่ง ไปบันทึก log และแจ้ง frontend |
+| Auth             | JWT (mock)              | Production ต่อ Google OAuth / Firebase ได้                       |
+| Docker           | Docker Compose          | รันทุกอย่างด้วยคำสั่งเดียว                                       |
 
 ---
 
-## 4. Redis Lock Strategy
+## 3. ขั้นตอนการจอง (แบบอ่านเข้าใจง่าย)
 
-- **Key:** `seat_lock:{screeningID}:{row}:{col}`
-- **Value:** UUID (lock_id) ของ client ที่ถือ lock
-- **TTL:** 300 วินาที (5 นาที) — กำหนดใน env `LOCK_TTL_SECONDS`
-- **Acquire:** `SET key lock_id NX EX 300` — สร้าง key ได้เฉพาะเมื่อยังไม่มี (NX) จึงกันการแย่งกัน lock ที่นั่งเดียวกัน
-- **Release:** Lua script ลบ key **เฉพาะเมื่อ value ตรงกับ lock_id** — ป้องกันการปล่อย lock ของคนอื่น (เช่น หลัง timeout แล้วมีคนใหม่มา lock)
-- **เหตุผลออกแบบ:** ใช้ Redis แบบ single-key lock + TTL เพื่อให้หลาย instance ของ backend รองรับ concurrency ได้โดยไม่มี double booking และไม่ต้องพึ่ง in-memory lock แค่ process เดียว
+| ขั้น | ผู้ใช้ทำอะไร                                           | ระบบทำอะไร                                                                                                                             |
+| ---- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | คลิกเลือกที่นั่งบนผัง                                  | รับคำขอ "ขอล็อกที่นั่งนี้"                                                                                                             |
+| 2    | —                                                      | ไปขอล็อกที่ Redis (กุญแจ = รอบฉาย+แถว+คอลัมน์, หมดอายุใน 5 นาที)                                                                       |
+| 3    | —                                                      | ถ้าล็อกได้ → อัปเดตสถานะเป็น **ล็อกแล้ว** แล้วส่งผ่าน WebSocket ให้ทุกคนเห็นทันที; ถ้าล็อกไม่ได้ (มีคนถืออยู่) → แจ้ง error            |
+| 4    | เห็นที่นั่งเป็นสีเหลือง (ล็อก) — คนอื่นก็เห็นเหมือนกัน | —                                                                                                                                      |
+| 5    | กด "Confirm payment" ภายใน 5 นาที                      | ตรวจว่าเป็นคนที่ถือล็อกอยู่ → เปลี่ยนเป็น **จองแล้ว** → ปล่อยล็อก → ส่งเหตุการณ์ "จองสำเร็จ" ไป MQ                                     |
+| 6a   | **ไม่**กดชำระภายใน 5 นาที                              | Worker เจอว่าหมดเวลา → ปล่อยล็อก → อัปเดตสถานะ → ส่งเหตุการณ์ "ปล่อยที่นั่ง" ไป MQ → ส่งผังใหม่ผ่าน WebSocket                          |
+| 6b   | —                                                      | ส่วนรับเหตุการณ์จาก MQ: บันทึก **Audit Log** ลง MongoDB + **ส่งการแจ้งเตือนไปหน้าเว็บ** (ข้อความ "การจองสำเร็จ" / "มีการปล่อยที่นั่ง") |
+
+**ผลลัพธ์:** ที่นั่งเดียวกันจะถูกยึดได้แค่คนเดียวในหนึ่งช่วงเวลา → **ไม่มี double booking**
 
 ---
 
-## 5. Message Queue ใช้ทำอะไร
+## 4. การล็อกที่นั่งด้วย Redis (สรุปแบบเข้าใจง่าย)
 
-- **Broker:** Redis Pub-Sub (เลือกตามโจทย์ 1 ใน Kafka / RabbitMQ / Redis Pub-Sub)
-- **Channel:** `booking_events`
-- **Events ที่ publish:** `BOOKING_SUCCESS`, `SEAT_RELEASED` (จาก backend ตอน confirm booking และจาก worker ตอน timeout)
-- **Use case จริงที่ใช้ MQ:**
-  1. **Audit Log:** Subscriber รับ event แล้วบันทึกลง MongoDB (`audit_logs`) — เช่น Booking Success, Booking Timeout, Seat Released
-  2. **Mock Notification:** เมื่อได้ event `BOOKING_SUCCESS` → log เป็น mock notification (ใน production ต่อ Email / Line ได้)
-- ไม่ใช้ MQ แค่มีไว้เฉย ๆ — ทุก event จาก booking/lock flow ส่งไป MQ และมี subscriber process จริง
+- **ชื่อกุญแจ (key):** `seat_lock:{รหัสรอบ}:{แถว}:{คอลัมน์}` — หนึ่ง key ต่อหนึ่งที่นั่งต่อหนึ่งรอบ
+- **ค่าที่เก็บ (value):** UUID ของคนที่ถือล็อก — ใช้ตอนปล่อยล็อก (ปล่อยได้เฉพาะคนที่ถือ UUID นี้)
+- **อายุกุญแจ (TTL):** 5 นาที — เกินแล้ว Redis ลบ key เอง (กำหนดใน env `LOCK_TTL_SECONDS`)
+- **การยึดล็อก:** ใช้คำสั่งแบบ "สร้าง key ได้ก็ต่อเมื่อยังไม่มี" (NX) → คนแรกที่ยึดได้เท่านั้น
+- **การปล่อยล็อก:** ใช้สคริปต์ Lua ลบ key **เฉพาะเมื่อ value ตรงกับ UUID ที่ถืออยู่** → ไม่ไปปล่อยล็อกของคนอื่น
+
+ทำไมต้องใช้ Redis ไม่ใช่แค่ตัวแปรในโปรแกรม? เพราะ backend อาจรันหลายตัว (หลายเครื่อง/หลาย process) ต้องมี "ที่กลาง" ให้ทุกตัวมาขอล็อกที่เดียวกัน — Redis ทำหน้าที่นี้
+
+---
+
+## 5. Message Queue (MQ) ใช้ทำอะไร
+
+ระบบใช้ **Redis Pub-Sub** เป็นช่องส่งเหตุการณ์ (ไม่ใช่แค่มี MQ ไว้เฉย ๆ)
+
+- **ช่อง (channel):** `booking_events`
+- **เหตุการณ์ที่ส่ง:** `BOOKING_SUCCESS` (จองสำเร็จ), `SEAT_RELEASED` (ปล่อยที่นั่ง เช่น หมดเวลา)
+- **ใครส่ง:** Backend ตอนกด Confirm payment และ Worker ตอนปล่อยล็อกเพราะหมดเวลา
+
+**เมื่อมีเหตุการณ์เข้า MQ แล้วเกิดอะไรต่อ:**
+
+1. **Audit Log:** โปรแกรมที่รับเหตุการณ์จะบันทึกลง MongoDB (ว่าเกิดอะไร เมื่อไหร่) — ใช้ดูประวัติได้ใน Admin
+2. **แจ้งเตือนที่ Frontend:** โปรแกรมเดียวกันจะส่งข้อความไปยัง "ห้อง" ของหน้ารอบฉายนั้นผ่าน WebSocket → ใครที่เปิดหน้ารอบฉายอยู่จะเห็นข้อความ "การจองสำเร็จ" หรือ "มีการปล่อยที่นั่ง" บนหน้าเว็บ (ต่อจริงสามารถเพิ่มส่งอีเมล/Line จากจุดนี้ได้)
 
 ---
 
 ## 6. วิธีรันระบบ
 
-ต้องรันได้ด้วยคำสั่งเดียว:
+รันด้วยคำสั่งเดียว:
 
 ```bash
 docker compose up --build
 ```
 
-- **แอป (Frontend):** http://localhost  
-- **API:** ใช้ผ่าน http://localhost (nginx proxy ไปที่ backend)
+- เปิดเว็บ: **http://localhost**
+- API เรียกผ่าน http://localhost (nginx ส่งต่อไปที่ backend)
 
-### Seed Data & Login (รันครั้งแรก)
+### ข้อมูลทดสอบและบัญชี (รันครั้งแรก)
 
-เมื่อรันครั้งแรก ระบบจะ seed ข้อมูลอัตโนมัติ: รอบฉาย 3 เรื่อง + User 2 คน
+รันครั้งแรกระบบจะสร้างข้อมูลตัวอย่าง: รอบฉาย 3 เรื่อง และผู้ใช้ 2 คน
 
-| บทบาท | Email / User ID ที่ใส่ตอน Login |
-|--------|----------------------------------|
-| **User** (จองที่นั่ง) | `user@cinema.local` |
-| **Admin** (จัดการระบบ) | `admin@cinema.local` |
+| บทบาท                  | อีเมลที่ใช้ล็อกอิน   | รหัสผ่าน (Password) |
+| ---------------------- | -------------------- | ------------------- |
+| **User** (จองที่นั่ง)  | `user@cinema.local`  | `123456`            |
+| **Admin** (จัดการระบบ) | `admin@cinema.local` | `123456`            |
 
-**วิธีใช้:**
-- **จองที่นั่ง:** ใส่ `user@cinema.local` → กด **Login** → เข้าหน้า Screenings → เลือกรอบ → เลือกที่นั่ง → Confirm payment
-- **เข้า Admin:** ใส่ `admin@cinema.local` → กด **Admin login** → ดู Bookings (มี filter) / Audit logs / สร้างรอบฉาย
+**วิธีลองใช้:**
 
-Display name ใส่อะไรก็ได้ (เช่น User, Admin)
+- **จองที่นั่ง:** ใส่อีเมล `user@cinema.local` รหัสผ่าน `123456` → กด **Login** → เลือก **Screenings** → เลือกรอบ → คลิกที่นั่ง → กด Confirm payment
+- **เข้า Admin:** ใส่อีเมล `admin@cinema.local` รหัสผ่าน `123456` → กด **Admin login** → ดู Bookings (กรองได้) / Audit logs / สร้างรอบฉาย
 
----
-
-## 7. Assumptions & Trade-offs
-
-**Assumptions**
-
-- **Auth:** ใช้ mock (user_id/email + JWT). โจทย์กำหนด Google OAuth หรือ Firebase — ระบบออกแบบให้ต่อ Firebase ได้ (env `FIREBASE_PROJECT_ID`); ถ้าไม่ตั้ง จะใช้ mock login กับ seed user
-- **Payment:** ไม่มี gateway จริง — "Confirm payment" คือการกดยืนยันในระบบ แล้วเปลี่ยนสถานะเป็น CONFIRMED
-- **Admin:** สร้างผ่าน seed (`admin@cinema.local`) หรือ flow Admin login; Admin API ตรวจ role ไม่ให้ User เรียก
-
-**Trade-offs**
-
-- ใช้ **Redis Pub-Sub** แทน Kafka/RabbitMQ เพื่อให้รันด้วย `docker compose` ง่าย ไม่ต้องเพิ่ม service; ถ้า scale ใหญ่ขึ้นอาจเปลี่ยนเป็น Kafka สำหรับ audit/event
-- **Lock TTL 5 นาที** เป็นค่าคงที่ในโจทย์; อ่านจาก env ได้ (`LOCK_TTL_SECONDS`) เพื่อปรับใน production
-- **Audit events:** บันทึก BOOKING_SUCCESS, BOOKING_TIMEOUT, SEAT_RELEASED, LOCK_FAIL (System Error) ลง MongoDB ผ่าน MQ subscriber
+ช่อง Display name ใส่อะไรก็ได้ (เช่น User, Admin)
 
 ---
 
-## สรุปความสอดคล้องกับโจทย์
+## 7. สิ่งที่สมมติไว้และทางเลือกที่ใช้
 
-| ข้อกำหนด | การทำในโปรเจกต์ |
-|----------|-------------------|
-| Tech Stack ตามที่กำหนด | Go (Gin), Vue 3, MongoDB, Redis (lock only), WebSocket, Redis Pub-Sub, Docker Compose |
-| รันด้วยคำสั่งเดียว | `docker compose up --build` |
-| User: Auth, Seat Map Real-time, Booking + Lock 5 นาที | Mock/seed login, WebSocket ผังที่นั่ง, Redis lock 5 นาที, Confirm = BOOKED |
-| Admin: Dashboard + Filter, Audit Logs | หน้า Admin: Bookings (filter ได้), Audit logs, สร้างรอบฉาย |
-| MQ use case จริง | Publish BOOKING_SUCCESS / SEAT_RELEASED → Audit log + Mock notification |
-| Concurrency / No double booking | Redis NX + TTL + release by lock_id |
-| Role USER / ADMIN, Admin API แยก | JWT + role; route /admin/* ตรวจสิทธิ์ |
-| Config ไม่ hardcode | ใช้ env (MONGODB_URI, REDIS_ADDR, JWT_SECRET, LOCK_TTL_SECONDS, …) |
+**สมมติ**
+
+- **Auth:** ใช้แบบ mock (ใส่ user_id/email + JWT). โจทย์บอกใช้ Google OAuth หรือ Firebase ได้ — ระบบออกแบบให้ต่อ Firebase ได้ (env `FIREBASE_PROJECT_ID`); ถ้าไม่ตั้ง จะใช้ mock กับ user ที่ seed ไว้
+- **Payment:** ไม่มี gateway จริง — "Confirm payment" คือกดยืนยันในระบบ แล้วสถานะเปลี่ยนเป็นจองแล้ว
+- **Admin:** มีจาก seed (`admin@cinema.local`); API แอดมินตรวจ role ไม่ให้ User เรียก
+
+**ทางเลือกที่ใช้**
+
+- ใช้ **Redis Pub-Sub** แทน Kafka/RabbitMQ เพื่อรันด้วย `docker compose` ได้เลย ไม่ต้องเพิ่ม service; ถ้าขยายระบบใหญ่ขึ้น ค่อยเปลี่ยนเป็น Kafka ได้
+- **ล็อก 5 นาที** ตามโจทย์; อ่านจาก env `LOCK_TTL_SECONDS` ได้ถ้าต้องการปรับ
+- **Audit:** บันทึกเหตุการณ์ BOOKING_SUCCESS, BOOKING_TIMEOUT, SEAT_RELEASED, LOCK_FAIL ลง MongoDB ผ่าน MQ
+
+---
+
+## สรุป: สอดคล้องกับโจทย์อย่างไร
+
+| ข้อกำหนด                                            | ที่ทำในโปรเจกต์                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Tech Stack ตามที่กำหนด                              | Go (Gin), Vue 3, MongoDB, Redis (ล็อก + Pub-Sub), WebSocket, Docker Compose              |
+| รันด้วยคำสั่งเดียว                                  | `docker compose up --build`                                                              |
+| User: Auth, ผังที่นั่ง Real-time, จอง + ล็อก 5 นาที | ล็อกอิน mock/seed, ผังอัปเดตผ่าน WebSocket, ล็อก 5 นาที, Confirm = จองแล้ว               |
+| Admin: Dashboard + Filter, Audit Logs               | หน้า Admin: Bookings (กรองได้), Audit logs, สร้างรอบฉาย                                  |
+| MQ ใช้จริง                                          | ส่งเหตุการณ์จองสำเร็จ/ปล่อยที่นั่ง → บันทึก audit + แจ้งเตือนที่ frontend ผ่าน WebSocket |
+| ไม่ double booking                                  | Redis ล็อก (NX + TTL + ปล่อยด้วย lock_id)                                                |
+| Role User / Admin แยก                               | JWT + role; route /admin/\* ตรวจสิทธิ์                                                   |
+| Config ไม่ hardcode                                 | ใช้ env (MONGODB_URI, REDIS_ADDR, JWT_SECRET, LOCK_TTL_SECONDS, …)                       |
